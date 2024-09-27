@@ -47,35 +47,31 @@ Répondez avec le domaine, la prestation la plus pertinente, et un score de conf
     else:
         return answer, "prestation générale", 50  # Score de confiance par défaut
 
-def calculate_estimate(domaine, prestation):
-    prestations = get_prestations()
-    tarifs = get_tarifs()
+def calculate_estimate(domaine, prestation, urgency):
+    print(f"Debug - Inputs: domaine={domaine}, prestation={prestation}, urgency={urgency}")
     
-    # Obtenir le nombre d'heures estimé pour la prestation
-    heures = prestations.get(domaine, {}).get(prestation)
-    if heures is None:
-        raise ValueError(f"Prestation '{prestation}' non trouvée dans le domaine '{domaine}'")
+    heures = prestations.get(domaine, {}).get(prestation, 10)
+    print(f"Debug - Heures: {heures}")
     
     tarif_horaire = tarifs["tarif_horaire_standard"]
+    print(f"Debug - Tarif horaire: {tarif_horaire}")
     
-    # Calculer l'estimation basée sur le nombre d'heures et le tarif horaire
     estimation = heures * tarif_horaire
-    
-    # Vérifier s'il existe un forfait pour cette prestation
+    print(f"Debug - Estimation initiale: {estimation}")
+
+    if urgency == "Urgent":
+        estimation *= tarifs["facteur_urgence"]
+        print(f"Debug - Estimation après urgence: {estimation}")
+
     forfait = tarifs["forfaits"].get(prestation)
     if forfait:
-        # Utiliser le minimum entre l'estimation horaire et le forfait
         estimation = min(estimation, forfait)
-    
-    # Ajouter les frais de dossier
-    frais_additionnels = tarifs["frais_additionnels"]
-    estimation += frais_additionnels["frais_de_dossier"]
-    
-    # Calculer une fourchette de prix (+/- 20%)
-    estimation_basse = estimation * 0.8
-    estimation_haute = estimation * 1.2
-    
-    return estimation_basse, estimation_haute
+        print(f"Debug - Estimation après forfait: {estimation}")
+        if urgency == "Urgent":
+            estimation *= tarifs["facteur_urgence"]
+            print(f"Debug - Estimation finale: {estimation}")
+
+    return round(estimation * 0.8), round(estimation * 1.2)
 
 def main():
     st.set_page_config(page_title="View Avocats - Devis en ligne", page_icon="⚖️", layout="wide")
