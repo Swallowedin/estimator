@@ -91,38 +91,25 @@ def main():
     st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
     st.title("🏛️ View Avocats - Estimateur de devis")
-    
-    # Message d'accueil rassurant
-    st.info("Bienvenue sur notre estimateur de devis en ligne. Cet outil est confidentiel et sans engagement. Il vous permet d'obtenir une estimation rapide et indicative des coûts pour vos besoins juridiques.")
+    st.write("Obtenez une estimation rapide pour vos besoins juridiques.")
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.subheader("Décrivez votre situation juridique")
-        
-        # Expansion des options de type de client
         client_type = st.selectbox(
             "Vous êtes :",
-            ("Particulier - Salarié", "Particulier - Retraité", "Particulier - Étudiant", 
-             "Professionnel - Indépendant", "Professionnel - PME", "Société")
+            ("Particulier", "Professionnel", "Société")
         )
-        
         urgency = st.selectbox(
             "Degré d'urgence :",
             ("Normal", "Urgent")
         )
-        
-        # Ajout d'un champ pour le code postal
-        code_postal = st.text_input("Votre code postal :")
-        
-        # Suggestions de mots-clés
-        st.write("Mots-clés courants : divorce, contrat de travail, création d'entreprise, litige commercial...")
-        
         question = st.text_area("Expliquez brièvement votre cas :", height=150)
 
         if st.button("Obtenir une estimation", key="estimate_button"):
             if question:
-                with st.spinner("Analyse en cours... Nous examinons attentivement votre situation pour vous fournir la meilleure estimation possible."):
+                with st.spinner("Analyse en cours..."):
                     domaine, prestation, confidence_score = analyze_question(question, client_type, urgency)
                     estimation_basse, estimation_haute = calculate_estimate(domaine, prestation, urgency)
 
@@ -143,9 +130,6 @@ def main():
                 st.write(f"**Domaine juridique identifié :** {domaine}")
                 st.write(f"**Prestation recommandée :** {prestation}")
                 st.write(f"**Estimation du coût hors taxes :** Entre {estimation_basse} €HT et {estimation_haute} €HT")
-
-                # Résultats plus détaillés
-                st.write(f"Cette estimation comprend environ {prestations.get(domaine, {}).get(prestation, 10)} heures de travail et inclut la recherche juridique, la rédaction de documents, et les consultations nécessaires.")
 
                 # Mettre en valeur l'option alternative
                 st.markdown("---")
@@ -176,7 +160,6 @@ def main():
 
                 st.markdown("---")
                 st.info("Note : Ces estimations sont fournies à titre indicatif et hors taxes. Pour un devis précis et personnalisé, ou pour réserver une consultation, veuillez nous contacter directement.")
-
             else:
                 st.warning("Veuillez décrire votre situation juridique avant de demander une estimation.")
 
