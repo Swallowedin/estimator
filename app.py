@@ -128,61 +128,71 @@ def calculate_estimate(domaine, prestation, urgency):
 
 
 
+import json
+import re
+
 def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
     prompt = f"""
-    Analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
-    Identifiez également les éléments spécifiques des fichiers de tarifs et de prestations que vous avez utilisés pour prendre votre décision.
-
+    En tant qu'assistant juridique expert, analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
+    
     Question : {question}
     Type de client : {client_type}
     Degré d'urgence : {urgency}
-   
     Domaine recommandé : {domaine}
     Prestation recommandée : {prestation}
 
-    Structurez votre réponse en trois parties :
-    1. Analyse détaillée (explication textuelle de votre raisonnement)
-    2. Éléments spécifiques utilisés (listez uniquement les éléments des fichiers tarifs et prestations que vous avez pris en compte, au format JSON)
-    3. Sources d'information (listez les sources spécifiques d'où vous avez tiré vos informations, comme les fichiers de tarifs, de prestations, ou d'autres sources internes)
+    Structurez votre réponse en trois parties distinctes :
+    1. Analyse détaillée : Expliquez votre raisonnement de manière claire et concise.
+    2. Éléments spécifiques utilisés : Fournissez un objet JSON valide et strict, avec des guillemets doubles pour toutes les clés et les valeurs string. 
+       Exemple : {{"domaine": {{"nom": "Droit_immobilier", "description": "Concerne les relations et transactions liées aux biens immobiliers"}}, "prestation": {{"nom": "Rédaction_bail_locatif", "description": "Service de rédaction d'un contrat de location"}}}}
+    3. Sources d'information : Listez les sources spécifiques utilisées (fichiers de tarifs, de prestations, ou autres sources internes).
+
+    Assurez-vous que chaque partie est clairement séparée et que le JSON est correctement formaté.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Vous êtes un assistant juridique expert qui explique son raisonnement de manière détaillée et transparente."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.5,
-        max_tokens=1000
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Vous êtes un assistant juridique expert qui explique son raisonnement de manière détaillée et transparente."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+            max_tokens=1000
+        )
 
-    full_response = response.choices[0].message.content.strip()
-   
-    # Initialisation des variables
-    analysis = ""
-    elements_used = {}
-    sources = "Aucune source spécifique mentionnée."
+        full_response = response.choices[0].message.content.strip()
+        
+        # Séparation des parties de la réponse
+        parts = re.split(r'\d+\.\s', full_response)
+        parts = [part.strip() for part in parts if part.strip()]
 
-    # Séparation des parties de la réponse
-    parts = full_response.split("2. Éléments spécifiques utilisés")
-    if len(parts) > 1:
-        analysis = parts[0].replace("1. Analyse détaillée", "").strip()
-        elements_and_sources = parts[1].split("3. Sources d'information")
-       
-        if len(elements_and_sources) > 0:
+        analysis = parts[0] if len(parts) > 0 else "Analyse non disponible."
+        elements_used = {}
+        sources = "Aucune source spécifique mentionnée."
+
+        if len(parts) > 1:
             try:
-                # Tentative de parser le JSON
-                elements_str = elements_and_sources[0].strip()
+                # Nettoyage et correction du JSON
+                elements_str = parts[1]
+                elements_str = re.sub(r'^.*?(\{)', r'\1', elements_str)
+                elements_str = re.sub(r'(\w+):', r'"\1":', elements_str)
+                elements_str = elements_str.replace("'", '"')
+                
                 elements_used = json.loads(elements_str)
             except json.JSONDecodeError as e:
                 print(f"Erreur de parsing JSON : {e}")
-                print(f"Contenu brut des éléments : {elements_str}")
+                print(f"Contenu brut des éléments après correction : {elements_str}")
                 elements_used = {"error": "Impossible de parser les éléments spécifiques", "raw_content": elements_str}
-       
-        if len(elements_and_sources) > 1:
-            sources = elements_and_sources[1].strip()
-    else:
-        analysis = full_response
+
+        if len(parts) > 2:
+            sources = parts[2]
+
+    except Exception as e:
+        print(f"Erreur lors de l'appel à l'API ou du traitement de la réponse : {e}")
+        analysis = "Une erreur s'est produite lors de l'analyse."
+        elements_used = {"error": "Erreur lors de l'analyse", "details": str(e)}
+        sources = "Non disponible en raison d'une erreur."
 
     return analysis, elements_used, sources
 
