@@ -43,17 +43,32 @@ Répondez avec le domaine et la prestation la plus pertinente, séparés par une
     return parts[0].strip(), parts[1].strip() if len(parts) >= 2 else "prestation générale"
 
 def calculate_estimate(domaine, prestation):
-    # La logique de calcul reste inchangée
-    heures = prestations.get(domaine, {}).get(prestation, {"min": 5, "max": 15})
+    prestations = get_prestations()
+    tarifs = get_tarifs()
+    
+    # Obtenir le nombre d'heures estimé pour la prestation
+    heures = prestations.get(domaine, {}).get(prestation)
+    if heures is None:
+        raise ValueError(f"Prestation '{prestation}' non trouvée dans le domaine '{domaine}'")
+    
     tarif_horaire = tarifs["tarif_horaire_standard"]
     
-    estimation_basse = heures["min"] * tarif_horaire["min"]
-    estimation_haute = heures["max"] * tarif_horaire["max"]
+    # Calculer l'estimation basée sur le nombre d'heures et le tarif horaire
+    estimation = heures * tarif_horaire
     
-    forfait = tarifs["forfaits"].get(prestation, None)
+    # Vérifier s'il existe un forfait pour cette prestation
+    forfait = tarifs["forfaits"].get(prestation)
     if forfait:
-        estimation_basse = min(estimation_basse, forfait["min"])
-        estimation_haute = min(estimation_haute, forfait["max"])
+        # Utiliser le minimum entre l'estimation horaire et le forfait
+        estimation = min(estimation, forfait)
+    
+    # Ajouter les frais de dossier
+    frais_additionnels = tarifs["frais_additionnels"]
+    estimation += frais_additionnels["frais_de_dossier"]
+    
+    # Calculer une fourchette de prix (+/- 20%)
+    estimation_basse = estimation * 0.8
+    estimation_haute = estimation * 1.2
     
     return estimation_basse, estimation_haute
 
@@ -82,16 +97,28 @@ def main():
         if st.button("Obtenir une estimation", key="estimate_button"):
             if question:
                 with st.spinner("Analyse en cours..."):
-                    domaine, prestation = analyze_question(question, client_type, urgency)
-                    estimation_basse, estimation_haute = calculate_estimate(domaine, prestation)
-                st.success("J'ai analysé votre demande ! Voici un devis indicatif de ce que coûte la prestation que vous avez demandé. Merci pour votre confiance !")
-                st.write(f"**Type de client :** {client_type}")
-                st.write(f"**Degré d'urgence :** {urgency}")
-                st.write(f"**Domaine juridique identifié :** {domaine}")
-                st.write(f"**Prestation recommandée :** {prestation}")
-                st.write(f"**Estimation indicative :** Entre {estimation_basse} € et {estimation_haute} €")
-                st.info("Note : Cette estimation est fournie à titre purement indicatif. Pour un devis précis et personnalisé, adapté à votre situation spécifique, nous vous invitons à contacter directement notre cabinet.")
-                st.warning("Des frais additionnels peuvent s'appliquer. Des réductions sont possibles pour les clients fidèles ou pour des volumes importants.")
+                    try:
+                        domaine, prestation = analyze_question(question, client_type, urgency)
+                        estimation_basse, estimation_haute = calculate_estimate(domaine, prestation)
+                        
+                        # Ajuster l'estimation en fonction de l'urgence
+                        if urgency == "Urgent":
+                            tarifs = get_tarifs()
+                            facteur_urgence = tarifs["facteur_urgence"]
+                            estimation_basse *= facteur_urgence
+                            estimation_haute *= facteur_urgence
+                        
+                        st.success("J'ai analysé votre demande ! Voici un devis indicatif de ce que coûte la prestation que vous avez demandée. Merci pour votre confiance !")
+                        st.write(f"**Type de client :** {client_type}")
+                        st.write(f"**Degré d'urgence :** {urgency}")
+                        st.write(f"**Domaine juridique identifié :** {domaine}")
+                        st.write(f"**Prestation recommandée :** {prestation}")
+                        st.write(f"**Estimation indicative :** Entre {estimation_basse:.2f} € et {estimation_haute:.2f} €")
+                        st.info("Note : Cette estimation est fournie à titre purement indicatif. Pour un devis précis et personnalisé, adapté à votre situation spécifique, nous vous invitons à contacter directement notre cabinet.")
+                        st.warning("Des frais additionnels peuvent s'appliquer. Des réductions sont possibles pour les clients fidèles ou pour des volumes importants.")
+                    except Exception as e:
+                        st.error(f"Une erreur s'est produite lors du calcul de l'estimation : {str(e)}")
+                        st.error(f"Domaine : {domaine}, Prestation : {prestation}")
             else:
                 st.warning("Veuillez décrire votre situation juridique avant de demander une estimation.")
 
