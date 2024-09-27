@@ -83,6 +83,16 @@ def main():
             'About': None
         }
     )
+
+    # CSS personnalisé pour cacher les éléments Streamlit
+    hide_streamlit_style = """
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        </style>
+    """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
     st.title("🏛️ View Avocats - Estimateur de devis")
     st.write("Obtenez une estimation indicative pour vos besoins juridiques.")
 
