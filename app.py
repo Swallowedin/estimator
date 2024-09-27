@@ -135,6 +135,15 @@ import json
 import re
 from typing import Tuple, Dict, Any
 
+import json
+import re
+from typing import Tuple, Dict, Any
+import logging
+
+# Configuration du logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine: str, prestation: str) -> Tuple[str, Dict[str, Any], str]:
     prompt = f"""
     En tant qu'assistant juridique expert, analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
@@ -155,6 +164,7 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
     """
 
     try:
+        logger.info("Envoi de la requête à l'API OpenAI")
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -166,10 +176,12 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
         )
 
         full_response = response.choices[0].message.content.strip()
+        logger.debug(f"Réponse complète de l'API : {full_response}")
         
         # Séparation des parties de la réponse
         parts = re.split(r'\d+\.|\*\*', full_response)
         parts = [part.strip() for part in parts if part.strip()]
+        logger.debug(f"Parties séparées de la réponse : {parts}")
 
         analysis = parts[0] if parts else "Analyse non disponible."
         elements_used = {}
@@ -177,16 +189,19 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
 
         if len(parts) > 1:
             elements_str = parts[1]
+            logger.debug(f"Partie des éléments spécifiques : {elements_str}")
             # Tentative d'extraction du JSON
             json_match = re.search(r'(\{.*?\})', elements_str, re.DOTALL)
             if json_match:
                 try:
                     elements_used = json.loads(json_match.group(1))
-                except json.JSONDecodeError:
-                    pass
+                    logger.info("JSON extrait avec succès")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Erreur lors du parsing JSON : {e}")
 
             # Si l'extraction du JSON a échoué, on extrait les informations manuellement
             if not elements_used:
+                logger.info("Extraction manuelle des informations")
                 domaine_match = re.search(r'domaine .*? est le (.*?),', elements_str)
                 prestation_match = re.search(r'prestation recommandée est (.*?)\.|$', elements_str)
                 
@@ -198,13 +213,12 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
         if len(parts) > 2:
             sources = parts[2]
 
-    except Exception as e:
-        print(f"Erreur lors de l'appel à l'API ou du traitement de la réponse : {e}")
-        analysis = "Une erreur s'est produite lors de l'analyse."
-        elements_used = {"error": "Erreur lors de l'analyse", "details": str(e)}
-        sources = "Non disponible en raison d'une erreur."
+        logger.info("Analyse terminée avec succès")
+        return analysis, elements_used, sources
 
-    return analysis, elements_used, sources
+    except Exception as e:
+        logger.exception(f"Erreur lors de l'appel à l'API ou du traitement de la réponse : {e}")
+        return "Une erreur s'est produite lors de l'analyse.", {"error": "Erreur lors de l'analyse", "details": str(e)}, "Non disponible en raison d'une erreur."
 
 
 def main():
