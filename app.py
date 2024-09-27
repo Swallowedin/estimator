@@ -1,17 +1,38 @@
 import streamlit as st
 from openai import OpenAI
-import os
-from prestations_heures import get_prestations
-from tarifs_prestations import get_tarifs
-from chatbot_instructions import get_chatbot_instructions
+import sys
+import importlib.util
 
-# Initialisation de l'API OpenAI
+# Configuration du client OpenAI
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-# Chargement des données
-prestations = get_prestations()
-tarifs = get_tarifs()
-instructions = get_chatbot_instructions()
+def load_py_module(file_path, module_name):
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+    except Exception as e:
+        print(f"Erreur lors du chargement du module {module_name}: {e}")
+        return None
+
+prestations_module = load_py_module('/content/drive/MyDrive/avocatsview/prestations-heures.py', 'prestations_heures')
+tarifs_module = load_py_module('/content/drive/MyDrive/avocatsview/tarifs-prestations.py', 'tarifs_prestations')
+instructions_module = load_py_module('/content/drive/MyDrive/avocatsview/chatbot-instructions.py', 'consignes_chatbot')
+
+# Définition des variables globales
+global prestations, tarifs, instructions
+prestations = prestations_module.get_prestations() if prestations_module else {}
+tarifs = tarifs_module.get_tarifs() if tarifs_module else {}
+instructions = instructions_module.get_chatbot_instructions() if instructions_module else ""
+
+
+
+
+
+
+
 
 def analyze_question(question, client_type, urgency):
     global prestations
@@ -21,16 +42,51 @@ def analyze_question(question, client_type, urgency):
         options.append(f"{domaine}: {prestations_str}")
     options_str = '\n'.join(options)
 
+
+
+
+
+
+
+
     prompt = f"""En tant qu'assistant juridique de View Avocats, analysez la question suivante et identifiez le domaine juridique et la prestation la plus pertinente parmi les options données.
+
+
+
+
+
+
+
 
 Question : {question}
 Type de client : {client_type}
 Degré d'urgence : {urgency}
 
+
+
+
+
+
+
+
 Options de domaines et prestations :
 {options_str}
 
-Répondez avec le domaine, la prestation la plus pertinente, et un score de confiance entre 0 et 100, séparés par des virgules."""
+
+
+
+
+
+
+
+Répondez avec le domaine et la prestation la plus pertinente, séparés par une virgule."""
+
+
+
+
+
+
+
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -40,147 +96,280 @@ Répondez avec le domaine, la prestation la plus pertinente, et un score de conf
         ]
     )
 
+
+
+
+
+
+
+
     answer = response.choices[0].message.content.strip()
     parts = answer.split(',')
-    if len(parts) >= 3:
-        return parts[0].strip(), parts[1].strip(), int(parts[2].strip())
+    if len(parts) >= 2:
+        return parts[0].strip(), parts[1].strip()
     else:
-        return answer, "prestation générale", 50  # Score de confiance par défaut
+        return answer, "prestation générale"
+
+
+
+
+
+
+
 
 def calculate_estimate(domaine, prestation, urgency):
-    print(f"Debug - Inputs: domaine={domaine}, prestation={prestation}, urgency={urgency}")
-    
-    heures = prestations.get(domaine, {}).get(prestation, 10)
-    print(f"Debug - Heures: {heures}")
-    
-    tarif_horaire = tarifs["tarif_horaire_standard"]
-    print(f"Debug - Tarif horaire: {tarif_horaire}")
-    
-    estimation = heures * tarif_horaire
-    print(f"Debug - Estimation initiale: {estimation}")
+    try:
+        heures = prestations.get(domaine, {}).get(prestation, 10)
+        tarif_horaire = tarifs.get("tarif_horaire_standard")
+        if tarif_horaire is None:
+            raise KeyError("tarif_horaire_standard non trouvé dans tarifs")
+       
+        estimation = heures * tarif_horaire
 
-    if urgency == "Urgent":
-        estimation *= tarifs["facteur_urgence"]
-        print(f"Debug - Estimation après urgence: {estimation}")
 
-    forfait = tarifs["forfaits"].get(prestation)
-    if forfait:
-        estimation = min(estimation, forfait)
-        print(f"Debug - Estimation après forfait: {estimation}")
+        calcul_details = [f"Heures estimées: {heures}"]
+        calcul_details.append(f"Tarif horaire standard: {tarif_horaire} €")
+        calcul_details.append(f"Estimation initiale: {heures} x {tarif_horaire} = {estimation} €")
+
+
         if urgency == "Urgent":
-            estimation *= tarifs["facteur_urgence"]
-            print(f"Debug - Estimation finale: {estimation}")
+            facteur_urgence = tarifs.get("facteur_urgence", 1.5)
+            estimation *= facteur_urgence
+            calcul_details.append(f"Facteur d'urgence appliqué: x{facteur_urgence}")
+            calcul_details.append(f"Estimation après urgence: {estimation} €")
 
-    return round(estimation * 0.8), round(estimation * 1.2)
+
+        forfait = tarifs.get("forfaits", {}).get(prestation)
+        if forfait:
+            calcul_details.append(f"Forfait disponible pour cette prestation: {forfait} €")
+            if forfait < estimation:
+                estimation = forfait
+                calcul_details.append(f"Forfait appliqué car plus avantageux: {forfait} €")
+            else:
+                calcul_details.append("Forfait non appliqué car moins avantageux que l'estimation horaire")
+
+
+        estimation_basse = round(estimation * 0.8)
+        estimation_haute = round(estimation * 1.2)
+        calcul_details.append(f"Fourchette d'estimation: {estimation_basse} € - {estimation_haute} €")
+
+
+        tarifs_utilises = {
+            "tarif_horaire_standard": tarif_horaire,
+            "facteur_urgence": tarifs.get("facteur_urgence") if urgency == "Urgent" else "Non appliqué",
+            "forfait_prestation": forfait if forfait else "Pas de forfait pour cette prestation"
+        }
+
+
+        return estimation_basse, estimation_haute, calcul_details, tarifs_utilises
+    except Exception as e:
+        print(f"Erreur dans calculate_estimate: {str(e)}")
+        print(f"tarifs: {tarifs}")
+        print(f"prestations: {prestations}")
+        raise
+
+
+
+
+def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
+    prompt = f"""
+    Analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
+    Identifiez également les éléments spécifiques des fichiers de tarifs et de prestations que vous avez utilisés pour prendre votre décision.
+
+
+    Question : {question}
+    Type de client : {client_type}
+    Degré d'urgence : {urgency}
+   
+    Domaine recommandé : {domaine}
+    Prestation recommandée : {prestation}
+
+
+    Structurez votre réponse en trois parties :
+    1. Analyse détaillée (explication textuelle de votre raisonnement)
+    2. Éléments spécifiques utilisés (listez uniquement les éléments des fichiers tarifs et prestations que vous avez pris en compte, au format JSON)
+    3. Sources d'information (listez les sources spécifiques d'où vous avez tiré vos informations, comme les fichiers de tarifs, de prestations, ou d'autres sources internes)
+    """
+
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Vous êtes un assistant juridique expert qui explique son raisonnement de manière détaillée et transparente."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.5,
+        max_tokens=1000
+    )
+
+
+    full_response = response.choices[0].message.content.strip()
+   
+    # Initialisation des variables
+    analysis = ""
+    elements_used = {}
+    sources = "Aucune source spécifique mentionnée."
+
+
+    # Séparation des parties de la réponse
+    parts = full_response.split("2. Éléments spécifiques utilisés")
+    if len(parts) > 1:
+        analysis = parts[0].replace("1. Analyse détaillée", "").strip()
+        elements_and_sources = parts[1].split("3. Sources d'information")
+       
+        if len(elements_and_sources) > 0:
+            try:
+                elements_used = json.loads(elements_and_sources[0].strip())
+            except json.JSONDecodeError:
+                elements_used = {"error": "Impossible de parser les éléments spécifiques"}
+       
+        if len(elements_and_sources) > 1:
+            sources = elements_and_sources[1].strip()
+    else:
+        analysis = full_response
+
+
+    return analysis, elements_used, sources
+
 
 def main():
     st.set_page_config(page_title="View Avocats - Devis en ligne", page_icon="⚖️", layout="wide")
-    
-    # CSS personnalisé pour cacher les éléments Streamlit
-    hide_streamlit_style = """
-        <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        </style>
-    """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
     st.title("🏛️ View Avocats - Estimateur de devis")
     st.write("Obtenez une estimation rapide pour vos besoins juridiques.")
 
-    col1, col2 = st.columns([2, 1])
 
-    with col1:
-        st.subheader("Décrivez votre situation juridique")
-        client_type = st.selectbox(
-            "Vous êtes :",
-            ("Particulier", "Professionnel", "Société")
-        )
-        urgency = st.selectbox(
-            "Degré d'urgence :",
-            ("Normal", "Urgent")
-        )
-        question = st.text_area("Expliquez brièvement votre cas :", height=150)
+    # Vérification initiale des données chargées
+    if not prestations or not tarifs:
+        st.error("Erreur : Données non chargées correctement")
+        st.json({
+            "prestations": {k: list(v.keys()) for k, v in prestations.items()} if prestations else {},
+            "tarifs": {k: v for k, v in tarifs.items() if k != 'forfaits'} if tarifs else {},
+            "instructions": instructions[:100] + "..." if instructions else "Vide"
+        })
+        if not prestations:
+            st.error("Les prestations n'ont pas été chargées. Veuillez vérifier le fichier prestations-heures.py")
+        if not tarifs:
+            st.error("Les tarifs n'ont pas été chargés. Veuillez vérifier le fichier tarifs-prestations.py")
+        return
 
-        if st.button("Obtenir une estimation", key="estimate_button"):
-            if question:
+
+    # Interface utilisateur de base
+    client_type = st.selectbox("Vous êtes :", ("Particulier", "Professionnel", "Société"))
+    urgency = st.selectbox("Degré d'urgence :", ("Normal", "Urgent"))
+    question = st.text_area("Expliquez brièvement votre cas :", height=150)
+
+
+    if st.button("Obtenir une estimation", key="estimate_button"):
+        if question:
+            try:
                 with st.spinner("Analyse en cours..."):
-                    domaine, prestation, confidence_score = analyze_question(question, client_type, urgency)
-                    estimation_basse, estimation_haute = calculate_estimate(domaine, prestation, urgency)
+                    # Étape 1 : Analyse de la question
+                    domaine, prestation = analyze_question(question, client_type, urgency)
+                    st.write(f"Domaine identifié : {domaine}")
+                    st.write(f"Prestation recommandée : {prestation}")
 
-                st.success("J'ai analysé votre demande ! Voici un devis indicatif de ce que coûte la prestation que vous avez demandée. Merci pour votre confiance !")
-                
-                # Affichage de la jauge de confiance
-                st.subheader("Niveau de confiance dans l'analyse")
-                st.progress(confidence_score / 100)
-                if confidence_score >= 80:
-                    st.success(f"Confiance élevée : {confidence_score}%")
-                elif confidence_score >= 50:
-                    st.warning(f"Confiance moyenne : {confidence_score}%")
-                else:
-                    st.error(f"Confiance faible : {confidence_score}%")
-                
-                st.write(f"**Type de client :** {client_type}")
-                st.write(f"**Degré d'urgence :** {urgency}")
-                st.write(f"**Domaine juridique identifié :** {domaine}")
-                st.write(f"**Prestation recommandée :** {prestation}")
-                st.write(f"**Estimation du coût hors taxes :** Entre {estimation_basse} €HT et {estimation_haute} €HT")
 
-                # Mettre en valeur l'option alternative
+                    # Étape 2 : Calcul de l'estimation
+                    estimation_basse, estimation_haute, calcul_details, tarifs_utilises = calculate_estimate(domaine, prestation, urgency)
+
+
+                    # Étape 3 : Obtention de l'analyse détaillée
+                    detailed_analysis, elements_used, sources = get_detailed_analysis(question, client_type, urgency, domaine, prestation)
+
+
+                # Affichage des résultats
+                st.success("Analyse terminée. Voici les résultats :")
+
+
+                col1, col2 = st.columns(2)
+
+
+                with col1:
+                    st.subheader("Résumé de l'estimation")
+                    st.write(f"**Type de client :** {client_type}")
+                    st.write(f"**Degré d'urgence :** {urgency}")
+                    st.write(f"**Domaine juridique :** {domaine}")
+                    st.write(f"**Prestation :** {prestation}")
+                    st.write(f"**Estimation :** Entre {estimation_basse} €HT et {estimation_haute} €HT")
+
+
+                    st.subheader("Détails du calcul")
+                    for detail in calcul_details:
+                        st.write(detail)
+
+
+                with col2:
+                    st.subheader("Éléments tarifaires utilisés")
+                    st.json(tarifs_utilises)
+
+
+                    if elements_used:
+                        st.subheader("Éléments spécifiques pris en compte")
+                        st.json(elements_used)
+
+
+                st.subheader("Analyse détaillée")
+                st.write(detailed_analysis)
+
+
+                if sources:
+                    st.subheader("Sources d'information")
+                    st.write(sources)
+
+
+                # Option alternative
                 st.markdown("---")
                 st.markdown("### 💡 Alternative Recommandée")
-                st.markdown(
-                    """
-                    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 2px solid #4CAF50;">
-                        <h3 style="color: #4CAF50;">Consultation initiale d'une heure</h3>
-                        <ul style="list-style-type: none; padding-left: 0;">
-                            <li>✅ Tarif fixe : <strong>100 € HT</strong></li>
-                            <li>✅ Idéal pour un premier avis juridique</li>
-                            <li>✅ Évaluation approfondie de votre situation</li>
-                            <li>✅ Recommandations personnalisées</li>
-                        </ul>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.info("""
+                    **Consultation initiale d'une heure**
+                    - Tarif fixe : 100 € HT
+                    - Idéal pour un premier avis juridique
+                    - Évaluation approfondie de votre situation
+                    - Recommandations personnalisées
+                """)
+
 
                 # Boutons d'action
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("Demander un devis détaillé", key="detailed_quote"):
-                        st.success("Nous vous contacterons bientôt pour un devis détaillé.")
+                    if st.button("Demander un devis détaillé"):
+                        st.success("Nous vous contacterons pour un devis détaillé.")
                 with col2:
-                    if st.button("Réserver une consultation initiale", key="book_consult"):
-                        st.success("Excellent choix ! Nous vous contacterons sous peu pour planifier votre consultation.")
+                    if st.button("Réserver une consultation initiale"):
+                        st.success("Nous vous contacterons pour planifier la consultation.")
 
-                st.markdown("---")
-                st.info("Note : Ces estimations sont fournies à titre indicatif et hors taxes. Pour un devis précis et personnalisé, ou pour réserver une consultation, veuillez nous contacter directement.")
-            else:
-                st.warning("Veuillez décrire votre situation juridique avant de demander une estimation.")
 
-        st.markdown("---")
-        st.subheader("Prêt à franchir le pas ?")
-        st.write("Nous sommes là pour vous accompagner dans votre démarche juridique. N'hésitez pas à nous contacter pour obtenir un devis personnalisé et des conseils adaptés à votre situation spécifique.")
-        st.write("📞 **Téléphone :** 01 23 45 67 89")
-        st.write("✉️ **Email :** contact@viewavocats.fr")
+            except Exception as e:
+                st.error(f"Une erreur s'est produite : {str(e)}")
+                st.write("Détails de l'erreur pour le débogage :")
+                st.write(e)
+                st.write("État des variables globales :")
+                st.json({
+                    "prestations": {k: list(v.keys()) for k, v in prestations.items()},
+                    "tarifs": {k: v for k, v in tarifs.items() if k != 'forfaits'},
+                    "instructions": instructions[:100] + "..." if instructions else "Vide"
+                })
+        else:
+            st.warning("Veuillez décrire votre cas avant de demander une estimation.")
 
-        if st.button("Demander un rendez-vous"):
-            st.success("Merci de votre intérêt ! Un de nos avocats vous contactera dans les plus brefs délais pour fixer un rendez-vous et discuter de votre situation en détail.")
 
-    with col2:
-        st.subheader("Nos domaines d'expertise")
-        for domaine in prestations.keys():
-            st.write(f"- {domaine.replace('_', ' ').title()}")
+    # Informations supplémentaires
+    st.markdown("---")
+    st.subheader("Nos domaines d'expertise")
+    for domaine in prestations.keys():
+        st.write(f"- {domaine.replace('_', ' ').title()}")
 
-        st.subheader("Pourquoi choisir View Avocats ?")
-        st.write("✔️ Expertise reconnue dans de nombreux domaines du droit")
-        st.write("✔️ Approche personnalisée pour chaque client")
-        st.write("✔️ Transparence des tarifs")
-        st.write("✔️ Engagement pour votre succès")
 
-        st.markdown("---")
-        st.write("© 2024 View Avocats. Tous droits réservés.")
+    st.subheader("Pourquoi choisir View Avocats ?")
+    st.write("✔️ Expertise reconnue dans de nombreux domaines du droit")
+    st.write("✔️ Approche personnalisée pour chaque client")
+    st.write("✔️ Transparence des tarifs")
+    st.write("✔️ Engagement pour votre succès")
+
+
+    st.markdown("---")
+    st.write("© 2024 View Avocats. Tous droits réservés.")
+
 
 if __name__ == "__main__":
     main()
