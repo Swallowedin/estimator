@@ -73,7 +73,16 @@ def calculate_estimate(domaine, prestation):
     return estimation_basse, estimation_haute
 
 def main():
-    st.set_page_config(page_title="View Avocats - Devis en ligne", page_icon="⚖️", layout="wide")
+    st.set_page_config(
+        page_title="View Avocats - Devis en ligne",
+        page_icon="⚖️",
+        layout="wide",
+        menu_items={
+            'Get Help': None,
+            'Report a bug': None,
+            'About': None
+        }
+    )
     st.title("🏛️ View Avocats - Estimateur de devis")
     st.write("Obtenez une estimation indicative pour vos besoins juridiques.")
 
