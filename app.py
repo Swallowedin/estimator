@@ -20,9 +20,9 @@ def load_py_module(file_path, module_name):
         return None
 
 # Chemins des modules à charger
-prestations_path = '/content/drive/MyDrive/avocatsview/prestations-heures.py'
-tarifs_path = '/content/drive/MyDrive/avocatsview/tarifs-prestations.py'
-instructions_path = '/content/drive/MyDrive/avocatsview/chatbot-instructions.py'
+prestations_path = '/content/drive/MyDrive/avocatsview/prestations_heures.py'
+tarifs_path = '/content/drive/MyDrive/avocatsview/tarifs_prestations.py'
+instructions_path = '/content/drive/MyDrive/avocatsview/chatbot_instructions.py'
 
 prestations_module = load_py_module(prestations_path, 'prestations_heures')
 tarifs_module = load_py_module(tarifs_path, 'tarifs_prestations')
