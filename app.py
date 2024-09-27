@@ -133,7 +133,6 @@ def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
     Analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
     Identifiez également les éléments spécifiques des fichiers de tarifs et de prestations que vous avez utilisés pour prendre votre décision.
 
-
     Question : {question}
     Type de client : {client_type}
     Degré d'urgence : {urgency}
@@ -141,13 +140,11 @@ def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
     Domaine recommandé : {domaine}
     Prestation recommandée : {prestation}
 
-
     Structurez votre réponse en trois parties :
     1. Analyse détaillée (explication textuelle de votre raisonnement)
     2. Éléments spécifiques utilisés (listez uniquement les éléments des fichiers tarifs et prestations que vous avez pris en compte, au format JSON)
     3. Sources d'information (listez les sources spécifiques d'où vous avez tiré vos informations, comme les fichiers de tarifs, de prestations, ou d'autres sources internes)
     """
-
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -159,14 +156,12 @@ def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
         max_tokens=1000
     )
 
-
     full_response = response.choices[0].message.content.strip()
    
     # Initialisation des variables
     analysis = ""
     elements_used = {}
     sources = "Aucune source spécifique mentionnée."
-
 
     # Séparation des parties de la réponse
     parts = full_response.split("2. Éléments spécifiques utilisés")
@@ -176,15 +171,18 @@ def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
        
         if len(elements_and_sources) > 0:
             try:
-                elements_used = json.loads(elements_and_sources[0].strip())
-            except json.JSONDecodeError:
-                elements_used = {"error": "Impossible de parser les éléments spécifiques"}
+                # Tentative de parser le JSON
+                elements_str = elements_and_sources[0].strip()
+                elements_used = json.loads(elements_str)
+            except json.JSONDecodeError as e:
+                print(f"Erreur de parsing JSON : {e}")
+                print(f"Contenu brut des éléments : {elements_str}")
+                elements_used = {"error": "Impossible de parser les éléments spécifiques", "raw_content": elements_str}
        
         if len(elements_and_sources) > 1:
             sources = elements_and_sources[1].strip()
     else:
         analysis = full_response
-
 
     return analysis, elements_used, sources
 
