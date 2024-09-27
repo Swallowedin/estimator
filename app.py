@@ -127,11 +127,11 @@ def calculate_estimate(domaine, prestation, urgency):
 
 
 
-
 import json
 import re
+from typing import Tuple, Dict, Any
 
-def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
+def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine: str, prestation: str) -> Tuple[str, Dict[str, Any], str]:
     prompt = f"""
     En tant qu'assistant juridique expert, analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
     
@@ -164,21 +164,25 @@ def get_detailed_analysis(question, client_type, urgency, domaine, prestation):
         full_response = response.choices[0].message.content.strip()
         
         # Séparation des parties de la réponse
-        parts = re.split(r'\d+\.\s', full_response)
+        parts = re.split(r'\d+\.|\*\*', full_response)
         parts = [part.strip() for part in parts if part.strip()]
 
-        analysis = parts[0] if len(parts) > 0 else "Analyse non disponible."
+        analysis = parts[0] if parts else "Analyse non disponible."
         elements_used = {}
         sources = "Aucune source spécifique mentionnée."
 
         if len(parts) > 1:
+            elements_str = parts[1]
+            # Extraction du JSON à partir du texte Markdown
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', elements_str, re.DOTALL)
+            if json_match:
+                elements_str = json_match.group(1)
+            
+            # Nettoyage et correction du JSON
+            elements_str = re.sub(r'(\w+):', r'"\1":', elements_str)
+            elements_str = elements_str.replace("'", '"').replace('d"un', "d'un")
+            
             try:
-                # Nettoyage et correction du JSON
-                elements_str = parts[1]
-                elements_str = re.sub(r'^.*?(\{)', r'\1', elements_str)
-                elements_str = re.sub(r'(\w+):', r'"\1":', elements_str)
-                elements_str = elements_str.replace("'", '"')
-                
                 elements_used = json.loads(elements_str)
             except json.JSONDecodeError as e:
                 print(f"Erreur de parsing JSON : {e}")
