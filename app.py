@@ -131,6 +131,10 @@ import json
 import re
 from typing import Tuple, Dict, Any
 
+import json
+import re
+from typing import Tuple, Dict, Any
+
 def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine: str, prestation: str) -> Tuple[str, Dict[str, Any], str]:
     prompt = f"""
     En tant qu'assistant juridique expert, analysez la question suivante et expliquez votre raisonnement pour le choix du domaine juridique et de la prestation.
@@ -144,7 +148,7 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
     Structurez votre réponse en trois parties distinctes :
     1. Analyse détaillée : Expliquez votre raisonnement de manière claire et concise.
     2. Éléments spécifiques utilisés : Fournissez un objet JSON valide et strict, avec des guillemets doubles pour toutes les clés et les valeurs string. 
-       Exemple : {{"domaine": {{"nom": "Droit_immobilier", "description": "Concerne les relations et transactions liées aux biens immobiliers"}}, "prestation": {{"nom": "Rédaction_bail_locatif", "description": "Service de rédaction d'un contrat de location"}}}}
+       Exemple : {{"domaine": {{"nom": "Droit_du_travail", "description": "Encadre les relations entre employeurs et salariés"}}, "prestation": {{"nom": "Contestation_licenciement", "description": "Assistance juridique pour contester un licenciement"}}}}
     3. Sources d'information : Listez les sources spécifiques utilisées (fichiers de tarifs, de prestations, ou autres sources internes).
 
     Assurez-vous que chaque partie est clairement séparée et que le JSON est correctement formaté.
@@ -173,21 +177,23 @@ def get_detailed_analysis(question: str, client_type: str, urgency: str, domaine
 
         if len(parts) > 1:
             elements_str = parts[1]
-            # Extraction du JSON à partir du texte Markdown
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', elements_str, re.DOTALL)
+            # Tentative d'extraction du JSON
+            json_match = re.search(r'(\{.*?\})', elements_str, re.DOTALL)
             if json_match:
-                elements_str = json_match.group(1)
-            
-            # Nettoyage et correction du JSON
-            elements_str = re.sub(r'(\w+):', r'"\1":', elements_str)
-            elements_str = elements_str.replace("'", '"').replace('d"un', "d'un")
-            
-            try:
-                elements_used = json.loads(elements_str)
-            except json.JSONDecodeError as e:
-                print(f"Erreur de parsing JSON : {e}")
-                print(f"Contenu brut des éléments après correction : {elements_str}")
-                elements_used = {"error": "Impossible de parser les éléments spécifiques", "raw_content": elements_str}
+                try:
+                    elements_used = json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+            # Si l'extraction du JSON a échoué, on extrait les informations manuellement
+            if not elements_used:
+                domaine_match = re.search(r'domaine .*? est le (.*?),', elements_str)
+                prestation_match = re.search(r'prestation recommandée est (.*?)\.|$', elements_str)
+                
+                elements_used = {
+                    "domaine": {"nom": domaine_match.group(1) if domaine_match else "Non spécifié"},
+                    "prestation": {"nom": prestation_match.group(1) if prestation_match else "Non spécifiée"}
+                }
 
         if len(parts) > 2:
             sources = parts[2]
