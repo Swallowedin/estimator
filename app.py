@@ -1,7 +1,9 @@
 import streamlit as st
 from openai import OpenAI
+import os
 import sys
 import importlib.util
+import json
 
 # Configuration du client OpenAI
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
@@ -17,22 +19,20 @@ def load_py_module(file_path, module_name):
         print(f"Erreur lors du chargement du module {module_name}: {e}")
         return None
 
-prestations_module = load_py_module('/content/drive/MyDrive/avocatsview/prestations-heures.py', 'prestations_heures')
-tarifs_module = load_py_module('/content/drive/MyDrive/avocatsview/tarifs-prestations.py', 'tarifs_prestations')
-instructions_module = load_py_module('/content/drive/MyDrive/avocatsview/chatbot-instructions.py', 'consignes_chatbot')
+# Chemins des modules à charger
+prestations_path = '/content/drive/MyDrive/avocatsview/prestations-heures.py'
+tarifs_path = '/content/drive/MyDrive/avocatsview/tarifs-prestations.py'
+instructions_path = '/content/drive/MyDrive/avocatsview/chatbot-instructions.py'
+
+prestations_module = load_py_module(prestations_path, 'prestations_heures')
+tarifs_module = load_py_module(tarifs_path, 'tarifs_prestations')
+instructions_module = load_py_module(instructions_path, 'consignes_chatbot')
 
 # Définition des variables globales
 global prestations, tarifs, instructions
 prestations = prestations_module.get_prestations() if prestations_module else {}
 tarifs = tarifs_module.get_tarifs() if tarifs_module else {}
 instructions = instructions_module.get_chatbot_instructions() if instructions_module else ""
-
-
-
-
-
-
-
 
 def analyze_question(question, client_type, urgency):
     global prestations
@@ -42,20 +42,7 @@ def analyze_question(question, client_type, urgency):
         options.append(f"{domaine}: {prestations_str}")
     options_str = '\n'.join(options)
 
-
-
-
-
-
-
-
     prompt = f"""En tant qu'assistant juridique de View Avocats, analysez la question suivante et identifiez le domaine juridique et la prestation la plus pertinente parmi les options données.
-
-
-
-
-
-
 
 
 Question : {question}
@@ -63,29 +50,11 @@ Type de client : {client_type}
 Degré d'urgence : {urgency}
 
 
-
-
-
-
-
-
 Options de domaines et prestations :
 {options_str}
 
 
-
-
-
-
-
-
 Répondez avec le domaine et la prestation la plus pertinente, séparés par une virgule."""
-
-
-
-
-
-
 
 
     response = client.chat.completions.create(
@@ -96,25 +65,13 @@ Répondez avec le domaine et la prestation la plus pertinente, séparés par une
         ]
     )
 
-
-
-
-
-
-
-
+    
     answer = response.choices[0].message.content.strip()
     parts = answer.split(',')
     if len(parts) >= 2:
         return parts[0].strip(), parts[1].strip()
     else:
         return answer, "prestation générale"
-
-
-
-
-
-
 
 
 def calculate_estimate(domaine, prestation, urgency):
@@ -236,7 +193,6 @@ def main():
     st.set_page_config(page_title="View Avocats - Devis en ligne", page_icon="⚖️", layout="wide")
     st.title("🏛️ View Avocats - Estimateur de devis")
     st.write("Obtenez une estimation rapide pour vos besoins juridiques.")
-
 
     # Vérification initiale des données chargées
     if not prestations or not tarifs:
