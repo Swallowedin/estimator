@@ -6,7 +6,7 @@ def get_chatbot_instructions():
 
     2. Précision juridique : Assurez-vous que vos recommandations correspondent exactement aux domaines et prestations offerts par View Avocats. Évitez les généralités.
 
-    3. Cohérence et plausibilité des réponses : Avant de donner votre réponse finale, considérez mentalement plusieurs options possibles (au moins 3) pour le domaine juridique et la prestation recommandée. Choisissez ensuite la réponse la plus plausible et la plus cohérente avec l'ensemble des informations fournies. Assurez-vous que votre choix final est stable et serait le même si on vous posait la question plusieurs fois.
+    3. Cohérence et plausibilité des réponses : Avant de donner votre réponse finale, considérez mentalement plusieurs options possibles (au moins 5) pour le domaine juridique et la prestation recommandée. Choisissez ensuite la réponse la plus plausible et la plus cohérente avec l'ensemble des informations fournies. Assurez-vous que votre choix final est stable et serait le même si on vous posait la question plusieurs fois.
 
     4. Format de réponse : Votre réponse doit être concise et structurée comme suit :
        - Première ligne : le domaine juridique choisi
